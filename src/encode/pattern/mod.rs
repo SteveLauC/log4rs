@@ -53,6 +53,8 @@
 //!     the default style for all other levels.
 //!     * `{h(the level is {l})}` -
 //!         <code style="color: red; font-weight: bold">the level is ERROR</code>
+//! * `D`, `debug` - Outputs its arguments ONLY in debug build.
+//! * `R`, `release` - Outputs its arguments ONLY in release build.
 //! * `l`, `level` - The log level.
 //! * `L`, `line` - The line that the log message came from, or `???` if not
 //!     provided.
@@ -449,6 +451,40 @@ impl<'a> From<Piece<'a>> for Chunk {
                         params: parameters,
                     }
                 }
+                "D" | "debug" => {
+                    if formatter.args.len() != 1 {
+                        return Chunk::Error("expected exactly one argument".to_owned());
+                    }
+
+                    let chunks = formatter
+                        .args
+                        .pop()
+                        .unwrap()
+                        .into_iter()
+                        .map(From::from)
+                        .collect();
+                    Chunk::Formatted {
+                        chunk: FormattedChunk::Debug(chunks),
+                        params: parameters,
+                    }
+                }
+                "R" | "release" => {
+                    if formatter.args.len() != 1 {
+                        return Chunk::Error("expected exactly one argument".to_owned());
+                    }
+
+                    let chunks = formatter
+                        .args
+                        .pop()
+                        .unwrap()
+                        .into_iter()
+                        .map(From::from)
+                        .collect();
+                    Chunk::Formatted {
+                        chunk: FormattedChunk::Release(chunks),
+                        params: parameters,
+                    }
+                }
                 "l" | "level" => no_args(&formatter.args, parameters, FormattedChunk::Level),
                 "m" | "message" => no_args(&formatter.args, parameters, FormattedChunk::Message),
                 "M" | "module" => no_args(&formatter.args, parameters, FormattedChunk::Module),
@@ -554,6 +590,8 @@ enum FormattedChunk {
     Newline,
     Align(Vec<Chunk>),
     Highlight(Vec<Chunk>),
+    Debug(Vec<Chunk>),
+    Release(Vec<Chunk>),
     Mdc(String, String),
 }
 
@@ -606,6 +644,22 @@ impl FormattedChunk {
                         w.set_style(&Style::new())?
                     }
                     _ => {}
+                }
+                Ok(())
+            }
+            FormattedChunk::Debug(ref chunks) => {
+                if cfg!(debug_assertions) {
+                    for chunk in chunks {
+                        chunk.encode(w, record)?;
+                    }
+                }
+                Ok(())
+            }
+            FormattedChunk::Release(ref chunks) => {
+                if cfg!(release_assertions) {
+                    for chunk in chunks {
+                        chunk.encode(w, record)?;
+                    }
                 }
                 Ok(())
             }
