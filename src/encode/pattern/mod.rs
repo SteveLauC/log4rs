@@ -61,6 +61,8 @@
 //! * `m`, `message` - The log message.
 //! * `M`, `module` - The module that the log message came from, or `???` if not
 //!     provided.
+//! * `RM`, `root_module` - The root module that the log message came from, or
+//!   `???` if not provided.
 //! * `P`, `pid` - The current process id.
 //! * `i`, `tid` - The current system-wide unique thread ID.
 //! * `n` - A platform-specific newline.
@@ -488,6 +490,9 @@ impl<'a> From<Piece<'a>> for Chunk {
                 "l" | "level" => no_args(&formatter.args, parameters, FormattedChunk::Level),
                 "m" | "message" => no_args(&formatter.args, parameters, FormattedChunk::Message),
                 "M" | "module" => no_args(&formatter.args, parameters, FormattedChunk::Module),
+                "RM" | "root_module" => {
+                    no_args(&formatter.args, parameters, FormattedChunk::RootModule)
+                }
                 "n" => no_args(&formatter.args, parameters, FormattedChunk::Newline),
                 "f" | "file" => no_args(&formatter.args, parameters, FormattedChunk::File),
                 "L" | "line" => no_args(&formatter.args, parameters, FormattedChunk::Line),
@@ -568,6 +573,15 @@ fn no_args(arg: &[Vec<Piece>], params: Parameters, chunk: FormattedChunk) -> Chu
     }
 }
 
+/// Extract the root module from the full module path.
+#[inline]
+fn root_module(full_module_path: &str) -> &str {
+    match full_module_path.find(':') {
+        Some(idx) => &full_module_path[..idx],
+        None => full_module_path,
+    }
+}
+
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
 enum Timezone {
     Utc,
@@ -580,6 +594,7 @@ enum FormattedChunk {
     Level,
     Message,
     Module,
+    RootModule,
     File,
     Line,
     Thread,
@@ -605,6 +620,13 @@ impl FormattedChunk {
             FormattedChunk::Level => write!(w, "{}", record.level()),
             FormattedChunk::Message => w.write_fmt(*record.args()),
             FormattedChunk::Module => w.write_all(record.module_path().unwrap_or("???").as_bytes()),
+            FormattedChunk::RootModule => w.write_all(
+                record
+                    .module_path()
+                    .map(root_module)
+                    .unwrap_or("???")
+                    .as_bytes(),
+            ),
             FormattedChunk::File => w.write_all(record.file().unwrap_or("???").as_bytes()),
             FormattedChunk::Line => match record.line() {
                 Some(line) => write!(w, "{}", line),
